@@ -1,0 +1,43 @@
+# GeoRisk AI - Minimal Placeholder Docker Compose Configuration
+# Note: Services described here represent the planned containerization structure for local development.
+
+version: '3.8'
+
+services:
+  # Planned Database Service (PostgreSQL + PostGIS + pgvector)
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: georisk-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-georisk}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-georisk_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-georisk_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Planned FastAPI Backend Service
+  backend:
+    build:
+      context: ./backend
+    container_name: georisk-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-georisk}:${POSTGRES_PASSWORD:-georisk_secret}@postgres:5432/${POSTGRES_DB:-georisk_db}
+    depends_on:
+      - postgres
+
+  # Planned Next.js Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+    container_name: georisk-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
