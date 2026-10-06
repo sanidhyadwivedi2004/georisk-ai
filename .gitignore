@@ -71,6 +71,11 @@ logs/
 *.temp
 scratch/
 
+# Database Files
+*.db
+*.sqlite
+*.sqlite3
+
 # Large Local Datasets (Scripts should be committed instead)
 data/raw/*
 !data/raw/.gitkeep

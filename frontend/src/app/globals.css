@@ -1,0 +1,198 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   GeoRisk AI — Intelligence Platform Theme
+   Graphite/charcoal palette with restrained accent colors.
+   Designed for professional analytical workstation use.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  --radius: 0.5rem;
+}
+
+.dark {
+  /* ── Surfaces ─────────────────────────────────────────────── */
+  --background: oklch(0.115 0.005 260);       /* #090b10  near-black */
+  --foreground: oklch(0.93 0.005 250);        /* #e6edf3  text primary */
+
+  --card: oklch(0.14 0.008 260);              /* #0f1218  surface-0 */
+  --card-foreground: oklch(0.93 0.005 250);
+
+  --popover: oklch(0.16 0.01 260);            /* #151920  surface-1 */
+  --popover-foreground: oklch(0.93 0.005 250);
+
+  /* ── Primary: restrained steel blue ──────────────────────── */
+  --primary: oklch(0.60 0.12 240);            /* #4c8ed9  steel blue */
+  --primary-foreground: oklch(0.98 0.002 250);
+
+  /* ── Secondary ───────────────────────────────────────────── */
+  --secondary: oklch(0.20 0.008 260);         /* #1c2028  surface-2 */
+  --secondary-foreground: oklch(0.93 0.005 250);
+
+  /* ── Muted ───────────────────────────────────────────────── */
+  --muted: oklch(0.20 0.008 260);
+  --muted-foreground: oklch(0.58 0.01 250);   /* #8b949e  text secondary */
+
+  /* ── Accent ──────────────────────────────────────────────── */
+  --accent: oklch(0.20 0.008 260);
+  --accent-foreground: oklch(0.93 0.005 250);
+
+  /* ── Destructive ─────────────────────────────────────────── */
+  --destructive: oklch(0.55 0.18 25);         /* #c44d4d  restrained red */
+
+  /* ── Borders ─────────────────────────────────────────────── */
+  --border: oklch(0.24 0.008 260);            /* #232830  subtle border */
+  --input: oklch(0.26 0.008 260);             /* #2d333b  input border */
+  --ring: oklch(0.60 0.12 240);
+
+  /* ── Chart palette ───────────────────────────────────────── */
+  --chart-1: oklch(0.60 0.12 240);            /* steel blue */
+  --chart-2: oklch(0.55 0.10 200);            /* teal */
+  --chart-3: oklch(0.60 0.12 50);             /* warm amber */
+  --chart-4: oklch(0.50 0.15 25);             /* warm red */
+  --chart-5: oklch(0.55 0.08 150);            /* muted green */
+
+  /* ── Sidebar ─────────────────────────────────────────────── */
+  --sidebar: oklch(0.12 0.006 260);
+  --sidebar-foreground: oklch(0.93 0.005 250);
+  --sidebar-primary: oklch(0.60 0.12 240);
+  --sidebar-primary-foreground: oklch(0.98 0.002 250);
+  --sidebar-accent: oklch(0.20 0.008 260);
+  --sidebar-accent-foreground: oklch(0.93 0.005 250);
+  --sidebar-border: oklch(0.24 0.008 260);
+  --sidebar-ring: oklch(0.60 0.12 240);
+}
+
+/* ── Base Styles ───────────────────────────────────────────── */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans scroll-smooth;
+  }
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(0.30 0.005 260);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.38 0.008 260);
+}
+
+/* ── Selection ─────────────────────────────────────────────── */
+
+::selection {
+  background: oklch(0.60 0.12 240 / 25%);
+  color: oklch(0.95 0.005 250);
+}
+
+/* ── Focus Ring ────────────────────────────────────────────── */
+
+:focus-visible {
+  outline: 1px solid oklch(0.60 0.12 240 / 60%);
+  outline-offset: 2px;
+}
+
+/* ── Custom Cursor ─────────────────────────────────────────── */
+
+.georisk-cursor {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='1.5' fill='%23e6edf3' fill-opacity='0.9'/%3E%3Cline x1='12' y1='4' x2='12' y2='8' stroke='%23e6edf3' stroke-opacity='0.4' stroke-width='0.75'/%3E%3Cline x1='12' y1='16' x2='12' y2='20' stroke='%23e6edf3' stroke-opacity='0.4' stroke-width='0.75'/%3E%3Cline x1='4' y1='12' x2='8' y2='12' stroke='%23e6edf3' stroke-opacity='0.4' stroke-width='0.75'/%3E%3Cline x1='16' y1='12' x2='20' y2='12' stroke='%23e6edf3' stroke-opacity='0.4' stroke-width='0.75'/%3E%3C/svg%3E") 12 12, crosshair;
+}
+
+/* ── Reduced Motion ────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Bar Indicator ─────────────────────────────────────────── */
+
+.risk-bar {
+  transition: width 0.6s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* ── Pulse for map markers ─────────────────────────────────── */
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+.pulse-marker::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 1px solid currentColor;
+  animation: pulse-ring 2s ease-out infinite;
+}
