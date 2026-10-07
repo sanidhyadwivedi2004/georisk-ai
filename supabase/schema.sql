@@ -1,177 +1,338 @@
--- GeoRisk AI — Supabase PostgreSQL Schema with PostGIS & Row Level Security (RLS)
--- Run this script in the Supabase SQL Editor to initialize the database.
-
--- 1. Enable Required Extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
--- PostGIS extension enabled conditionally if supported by instance
 CREATE EXTENSION IF NOT EXISTS "postgis";
 
--- 2. Countries Table
+CREATE TABLE IF NOT EXISTS public.chokepoints (
+	id VARCHAR NOT NULL,
+	name VARCHAR NOT NULL,
+	location VARCHAR NOT NULL,
+	latitude FLOAT NOT NULL,
+	longitude FLOAT NOT NULL,
+	daily_oil_flow_mbpd FLOAT,
+	vulnerability_rating FLOAT,
+	status VARCHAR,
+	data_status VARCHAR,
+	PRIMARY KEY (id)
+);
+
 CREATE TABLE IF NOT EXISTS public.countries (
-    id TEXT PRIMARY KEY, -- ISO Alpha-3 e.g. 'IND', 'IRN', 'SAU'
-    iso_code VARCHAR(3) NOT NULL UNIQUE,
-    name VARCHAR(255) NOT NULL,
-    region VARCHAR(255),
-    crude_import_dependency_pct FLOAT DEFAULT 0.0,
-    strategic_petroleum_reserve_days INT DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+	id VARCHAR NOT NULL,
+	name VARCHAR NOT NULL,
+	region VARCHAR,
+	crude_import_dependency_pct FLOAT,
+	strategic_petroleum_reserve_days INTEGER,
+	data_status VARCHAR,
+	created_at TIMESTAMP WITHOUT TIME ZONE,
+	PRIMARY KEY (id)
 );
 
--- 3. Data Sources Table
-CREATE TABLE IF NOT EXISTS public.sources (
-    id TEXT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    url TEXT,
-    source_type VARCHAR(100) NOT NULL,
-    reliability_notes TEXT,
-    last_checked TIMESTAMPTZ DEFAULT NOW(),
-    status VARCHAR(50) DEFAULT 'Active',
-    classification VARCHAR(50) DEFAULT 'VERIFIED',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 4. Geopolitical Events Table
-CREATE TABLE IF NOT EXISTS public.geopolitical_events (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL,
-    event_type VARCHAR(100) NOT NULL, -- maritime, conflict, infrastructure, sanctions
-    severity FLOAT NOT NULL CHECK (severity >= 0.0 AND severity <= 10.0),
-    confidence FLOAT NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
-    country_id TEXT REFERENCES public.countries(id),
-    latitude FLOAT,
-    longitude FLOAT,
-    start_time TIMESTAMPTZ NOT NULL,
-    end_time TIMESTAMPTZ,
-    source_url TEXT,
-    source_name TEXT,
-    source_published_at TIMESTAMPTZ,
-    source_hash VARCHAR(64) UNIQUE, -- SHA256 deduplication hash
-    affected_commodities JSONB DEFAULT '[]'::jsonb,
-    actors JSONB DEFAULT '[]'::jsonb,
-    evidence JSONB DEFAULT '[]'::jsonb,
-    classification VARCHAR(50) DEFAULT 'VERIFIED',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 5. Energy Flows Table
 CREATE TABLE IF NOT EXISTS public.energy_flows (
-    id TEXT PRIMARY KEY,
-    origin_country_id TEXT REFERENCES public.countries(id),
-    destination_country_id TEXT REFERENCES public.countries(id),
-    commodity VARCHAR(100) NOT NULL,
-    volume FLOAT DEFAULT 0.0,
-    unit VARCHAR(50) DEFAULT 'bpd',
-    period VARCHAR(50) DEFAULT 'daily',
-    source TEXT,
-    classification VARCHAR(50) DEFAULT 'VERIFIED',
-    created_at TIMESTAMPTZ DEFAULT NOW()
+	id VARCHAR NOT NULL,
+	origin_country VARCHAR NOT NULL,
+	destination_country VARCHAR NOT NULL,
+	commodity VARCHAR NOT NULL,
+	volume_bpd FLOAT,
+	primary_chokepoint VARCHAR,
+	data_status VARCHAR,
+	PRIMARY KEY (id)
 );
 
--- 6. Routes & Chokepoints Table
+CREATE TABLE IF NOT EXISTS public.events (
+	id VARCHAR NOT NULL,
+	title VARCHAR NOT NULL,
+	event_type VARCHAR NOT NULL,
+	severity FLOAT NOT NULL,
+	confidence FLOAT NOT NULL,
+	location VARCHAR NOT NULL,
+	latitude FLOAT,
+	longitude FLOAT,
+	timestamp TIMESTAMP WITHOUT TIME ZONE,
+	summary TEXT NOT NULL,
+	evidence JSON,
+	affected_commodities JSON,
+	actors JSON,
+	source VARCHAR NOT NULL,
+	source_url VARCHAR,
+	data_classification VARCHAR,
+	PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS public.ports (
+	id VARCHAR NOT NULL,
+	name VARCHAR NOT NULL,
+	country_code VARCHAR NOT NULL,
+	port_type VARCHAR NOT NULL,
+	capacity_bpd FLOAT,
+	latitude FLOAT,
+	longitude FLOAT,
+	status VARCHAR,
+	data_status VARCHAR,
+	PRIMARY KEY (id)
+);
+
 CREATE TABLE IF NOT EXISTS public.routes (
-    id TEXT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    origin VARCHAR(255) NOT NULL,
-    destination VARCHAR(255) NOT NULL,
-    route_type VARCHAR(100) DEFAULT 'maritime',
-    chokepoint_ids JSONB DEFAULT '[]'::jsonb,
-    additional_transit_days FLOAT DEFAULT 0.0,
-    status VARCHAR(50) DEFAULT 'Active',
-    classification VARCHAR(50) DEFAULT 'VERIFIED',
-    created_at TIMESTAMPTZ DEFAULT NOW()
+	id VARCHAR NOT NULL,
+	name VARCHAR NOT NULL,
+	origin VARCHAR NOT NULL,
+	destination VARCHAR NOT NULL,
+	chokepoints JSON,
+	status VARCHAR,
+	additional_transit_days_if_rerouted FLOAT,
+	data_status VARCHAR,
+	PRIMARY KEY (id)
 );
 
--- 7. Risk Assessments Table (Deterministic Engine Output)
-CREATE TABLE IF NOT EXISTS public.risk_assessments (
-    id TEXT PRIMARY KEY,
-    event_id TEXT REFERENCES public.geopolitical_events(id) ON DELETE CASCADE,
-    country_id TEXT REFERENCES public.countries(id),
-    risk_score INT NOT NULL CHECK (risk_score >= 0 AND risk_score <= 100),
-    threat_level VARCHAR(50) NOT NULL, -- Low, Moderate, Elevated, High
-    severity_component FLOAT NOT NULL,
-    exposure_component FLOAT NOT NULL,
-    dependency_component FLOAT NOT NULL,
-    duration_component FLOAT NOT NULL,
-    confidence FLOAT DEFAULT 0.9,
-    formula_version VARCHAR(50) DEFAULT 'v1.0-deterministic',
-    classification VARCHAR(50) DEFAULT 'DERIVED',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 8. Supply Impact Assessments Table (Deterministic Engine Output)
-CREATE TABLE IF NOT EXISTS public.supply_impacts (
-    id TEXT PRIMARY KEY,
-    event_id TEXT REFERENCES public.geopolitical_events(id) ON DELETE CASCADE,
-    country_id TEXT REFERENCES public.countries(id),
-    commodity VARCHAR(100) NOT NULL,
-    baseline_volume FLOAT NOT NULL,
-    estimated_loss FLOAT NOT NULL,
-    loss_percentage FLOAT NOT NULL,
-    concentration_index FLOAT NOT NULL, -- Normalized HHI (0-100)
-    route_exposure_pct FLOAT DEFAULT 0.0,
-    projected_delay_days FLOAT DEFAULT 0.0,
-    reserve_runway_days INT DEFAULT 0,
-    price_pressure_proxy VARCHAR(100) DEFAULT 'MODERATE (MODELLED)',
-    classification VARCHAR(50) DEFAULT 'DERIVED',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 9. Scenarios Table (What-If Stress Testing)
 CREATE TABLE IF NOT EXISTS public.scenarios (
-    id TEXT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    country_id TEXT REFERENCES public.countries(id),
-    parameters JSONB NOT NULL,
-    result JSONB NOT NULL,
-    classification VARCHAR(50) DEFAULT 'ASSUMPTION',
-    created_at TIMESTAMPTZ DEFAULT NOW()
+	id VARCHAR NOT NULL,
+	title VARCHAR NOT NULL,
+	target_country VARCHAR,
+	commodity VARCHAR,
+	duration_days INTEGER NOT NULL,
+	disruption_percent FLOAT NOT NULL,
+	alternative_supply_capacity_bpd FLOAT,
+	route_availability_pct FLOAT,
+	reserve_coverage_days INTEGER,
+	data_classification VARCHAR,
+	created_at TIMESTAMP WITHOUT TIME ZONE,
+	PRIMARY KEY (id)
 );
 
--- 10. AI Conversations Table (Grounded Gemini Log)
-CREATE TABLE IF NOT EXISTS public.ai_conversations (
-    id TEXT PRIMARY KEY,
-    session_id VARCHAR(255) NOT NULL,
-    user_message TEXT NOT NULL,
-    assistant_message TEXT NOT NULL,
-    context JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS public.sources (
+	id VARCHAR NOT NULL,
+	name VARCHAR NOT NULL,
+	category VARCHAR NOT NULL,
+	status VARCHAR,
+	last_update VARCHAR,
+	reliability_score FLOAT,
+	url VARCHAR,
+	description TEXT,
+	classification VARCHAR,
+	retrieved_at TIMESTAMP WITHOUT TIME ZONE,
+	PRIMARY KEY (id)
 );
 
--- 11. Performance Indexes
-CREATE INDEX IF NOT EXISTS idx_events_country ON public.geopolitical_events(country_id);
-CREATE INDEX IF NOT EXISTS idx_events_start_time ON public.geopolitical_events(start_time DESC);
-CREATE INDEX IF NOT EXISTS idx_events_source_hash ON public.geopolitical_events(source_hash);
-CREATE INDEX IF NOT EXISTS idx_risk_score ON public.risk_assessments(risk_score DESC);
-CREATE INDEX IF NOT EXISTS idx_supply_impact_country ON public.supply_impacts(country_id);
+CREATE TABLE IF NOT EXISTS public.suppliers (
+	id VARCHAR NOT NULL,
+	name VARCHAR NOT NULL,
+	country_code VARCHAR NOT NULL,
+	market_share_pct FLOAT,
+	primary_commodity VARCHAR,
+	data_status VARCHAR,
+	PRIMARY KEY (id)
+);
 
--- 12. Row Level Security (RLS) Policies
+CREATE TABLE IF NOT EXISTS public.articles (
+	id VARCHAR NOT NULL,
+	source_id VARCHAR,
+	title VARCHAR NOT NULL,
+	source_url VARCHAR,
+	published_at TIMESTAMP WITHOUT TIME ZONE,
+	retrieved_at TIMESTAMP WITHOUT TIME ZONE,
+	raw_content TEXT,
+	dataset_version VARCHAR,
+	data_status VARCHAR,
+	PRIMARY KEY (id),
+	FOREIGN KEY(source_id) REFERENCES public.sources (id)
+);
+
+CREATE TABLE IF NOT EXISTS public.event_entities (
+	id SERIAL NOT NULL,
+	event_id VARCHAR NOT NULL,
+	entity_name VARCHAR NOT NULL,
+	entity_type VARCHAR NOT NULL,
+	canonical_id VARCHAR,
+	PRIMARY KEY (id),
+	FOREIGN KEY(event_id) REFERENCES public.events (id)
+);
+
+CREATE TABLE IF NOT EXISTS public.impact_assessments (
+	id VARCHAR NOT NULL,
+	event_id VARCHAR NOT NULL,
+	target_country VARCHAR NOT NULL,
+	commodity VARCHAR NOT NULL,
+	import_exposure_pct FLOAT NOT NULL,
+	supplier_concentration_hhi FLOAT NOT NULL,
+	route_exposure_pct FLOAT NOT NULL,
+	potential_disruption_bpd FLOAT NOT NULL,
+	projected_delay_days FLOAT NOT NULL,
+	reserve_runway_days INTEGER NOT NULL,
+	price_pressure_proxy VARCHAR NOT NULL,
+	data_classification VARCHAR,
+	timestamp TIMESTAMP WITHOUT TIME ZONE,
+	PRIMARY KEY (id),
+	FOREIGN KEY(event_id) REFERENCES public.events (id)
+);
+
+CREATE TABLE IF NOT EXISTS public.recommendations (
+	id VARCHAR NOT NULL,
+	event_id VARCHAR,
+	action VARCHAR NOT NULL,
+	priority VARCHAR NOT NULL,
+	reason TEXT NOT NULL,
+	trigger VARCHAR NOT NULL,
+	evidence JSON,
+	expected_effect VARCHAR NOT NULL,
+	data_classification VARCHAR,
+	created_at TIMESTAMP WITHOUT TIME ZONE,
+	PRIMARY KEY (id),
+	FOREIGN KEY(event_id) REFERENCES public.events (id)
+);
+
+CREATE TABLE IF NOT EXISTS public.risk_assessments (
+	id VARCHAR NOT NULL,
+	event_id VARCHAR NOT NULL,
+	overall_risk_score INTEGER NOT NULL,
+	threat_level VARCHAR NOT NULL,
+	confidence_score FLOAT NOT NULL,
+	threat_severity FLOAT NOT NULL,
+	event_probability FLOAT NOT NULL,
+	asset_exposure FLOAT NOT NULL,
+	chokepoint_criticality FLOAT NOT NULL,
+	alternative_route_gap FLOAT NOT NULL,
+	formula_version VARCHAR,
+	input_parameters JSON,
+	weights JSON,
+	timestamp TIMESTAMP WITHOUT TIME ZONE,
+	data_classification VARCHAR,
+	PRIMARY KEY (id),
+	FOREIGN KEY(event_id) REFERENCES public.events (id)
+);
+
+CREATE TABLE IF NOT EXISTS public.scenario_results (
+	id VARCHAR NOT NULL,
+	scenario_id VARCHAR NOT NULL,
+	baseline_risk INTEGER NOT NULL,
+	simulated_risk INTEGER NOT NULL,
+	baseline_exposure_pct FLOAT NOT NULL,
+	simulated_exposure_pct FLOAT NOT NULL,
+	projected_volume_loss_bpd FLOAT NOT NULL,
+	simulated_delay_days FLOAT NOT NULL,
+	remaining_reserve_days INTEGER NOT NULL,
+	mitigation_urgency VARCHAR NOT NULL,
+	calculated_at TIMESTAMP WITHOUT TIME ZONE,
+	PRIMARY KEY (id),
+	FOREIGN KEY(scenario_id) REFERENCES public.scenarios (id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_chokepoints_id ON public.chokepoints (id);
+CREATE INDEX IF NOT EXISTS ix_countries_id ON public.countries (id);
+CREATE INDEX IF NOT EXISTS ix_energy_flows_id ON public.energy_flows (id);
+CREATE INDEX IF NOT EXISTS ix_events_id ON public.events (id);
+CREATE INDEX IF NOT EXISTS ix_ports_id ON public.ports (id);
+CREATE INDEX IF NOT EXISTS ix_routes_id ON public.routes (id);
+CREATE INDEX IF NOT EXISTS ix_scenarios_id ON public.scenarios (id);
+CREATE INDEX IF NOT EXISTS ix_sources_id ON public.sources (id);
+CREATE INDEX IF NOT EXISTS ix_suppliers_id ON public.suppliers (id);
+CREATE INDEX IF NOT EXISTS ix_articles_id ON public.articles (id);
+CREATE INDEX IF NOT EXISTS ix_impact_assessments_id ON public.impact_assessments (id);
+CREATE INDEX IF NOT EXISTS ix_recommendations_id ON public.recommendations (id);
+CREATE INDEX IF NOT EXISTS ix_risk_assessments_id ON public.risk_assessments (id);
+CREATE INDEX IF NOT EXISTS ix_scenario_results_id ON public.scenario_results (id);
+
+ALTER TABLE public.chokepoints ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.countries ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.sources ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.geopolitical_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.energy_flows ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.routes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.risk_assessments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.supply_impacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.scenarios ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.ai_conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.suppliers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.articles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.event_entities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.impact_assessments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.recommendations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.risk_assessments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.scenario_results ENABLE ROW LEVEL SECURITY;
 
--- Allow Public Read Access for Analytics Data
+DROP POLICY IF EXISTS "Allow public read access on chokepoints" ON public.chokepoints;
+CREATE POLICY "Allow public read access on chokepoints" ON public.chokepoints FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read access on countries" ON public.countries;
 CREATE POLICY "Allow public read access on countries" ON public.countries FOR SELECT USING (true);
-CREATE POLICY "Allow public read access on sources" ON public.sources FOR SELECT USING (true);
-CREATE POLICY "Allow public read access on geopolitical_events" ON public.geopolitical_events FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read access on energy_flows" ON public.energy_flows;
 CREATE POLICY "Allow public read access on energy_flows" ON public.energy_flows FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read access on events" ON public.events;
+CREATE POLICY "Allow public read access on events" ON public.events FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read access on ports" ON public.ports;
+CREATE POLICY "Allow public read access on ports" ON public.ports FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read access on routes" ON public.routes;
 CREATE POLICY "Allow public read access on routes" ON public.routes FOR SELECT USING (true);
-CREATE POLICY "Allow public read access on risk_assessments" ON public.risk_assessments FOR SELECT USING (true);
-CREATE POLICY "Allow public read access on supply_impacts" ON public.supply_impacts FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read access on scenarios" ON public.scenarios;
 CREATE POLICY "Allow public read access on scenarios" ON public.scenarios FOR SELECT USING (true);
-CREATE POLICY "Allow public read access on ai_conversations" ON public.ai_conversations FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read access on sources" ON public.sources;
+CREATE POLICY "Allow public read access on sources" ON public.sources FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read access on suppliers" ON public.suppliers;
+CREATE POLICY "Allow public read access on suppliers" ON public.suppliers FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read access on articles" ON public.articles;
+CREATE POLICY "Allow public read access on articles" ON public.articles FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read access on event_entities" ON public.event_entities;
+CREATE POLICY "Allow public read access on event_entities" ON public.event_entities FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read access on impact_assessments" ON public.impact_assessments;
+CREATE POLICY "Allow public read access on impact_assessments" ON public.impact_assessments FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read access on recommendations" ON public.recommendations;
+CREATE POLICY "Allow public read access on recommendations" ON public.recommendations FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read access on risk_assessments" ON public.risk_assessments;
+CREATE POLICY "Allow public read access on risk_assessments" ON public.risk_assessments FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow public read access on scenario_results" ON public.scenario_results;
+CREATE POLICY "Allow public read access on scenario_results" ON public.scenario_results FOR SELECT USING (true);
 
--- Allow Service Role Write Access
-CREATE POLICY "Allow service role insert on geopolitical_events" ON public.geopolitical_events FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow service role update on geopolitical_events" ON public.geopolitical_events FOR UPDATE USING (true);
-CREATE POLICY "Allow service role insert on risk_assessments" ON public.risk_assessments FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow service role insert on supply_impacts" ON public.supply_impacts FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow service role insert on chokepoints" ON public.chokepoints;
+CREATE POLICY "Allow service role insert on chokepoints" ON public.chokepoints FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow service role update on chokepoints" ON public.chokepoints;
+CREATE POLICY "Allow service role update on chokepoints" ON public.chokepoints FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Allow service role insert on countries" ON public.countries;
+CREATE POLICY "Allow service role insert on countries" ON public.countries FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow service role update on countries" ON public.countries;
+CREATE POLICY "Allow service role update on countries" ON public.countries FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Allow service role insert on energy_flows" ON public.energy_flows;
+CREATE POLICY "Allow service role insert on energy_flows" ON public.energy_flows FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow service role update on energy_flows" ON public.energy_flows;
+CREATE POLICY "Allow service role update on energy_flows" ON public.energy_flows FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Allow service role insert on events" ON public.events;
+CREATE POLICY "Allow service role insert on events" ON public.events FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow service role update on events" ON public.events;
+CREATE POLICY "Allow service role update on events" ON public.events FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Allow service role insert on ports" ON public.ports;
+CREATE POLICY "Allow service role insert on ports" ON public.ports FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow service role update on ports" ON public.ports;
+CREATE POLICY "Allow service role update on ports" ON public.ports FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Allow service role insert on routes" ON public.routes;
+CREATE POLICY "Allow service role insert on routes" ON public.routes FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow service role update on routes" ON public.routes;
+CREATE POLICY "Allow service role update on routes" ON public.routes FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Allow service role insert on scenarios" ON public.scenarios;
 CREATE POLICY "Allow service role insert on scenarios" ON public.scenarios FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow service role insert on ai_conversations" ON public.ai_conversations FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow service role update on scenarios" ON public.scenarios;
+CREATE POLICY "Allow service role update on scenarios" ON public.scenarios FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Allow service role insert on sources" ON public.sources;
+CREATE POLICY "Allow service role insert on sources" ON public.sources FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow service role update on sources" ON public.sources;
+CREATE POLICY "Allow service role update on sources" ON public.sources FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Allow service role insert on suppliers" ON public.suppliers;
+CREATE POLICY "Allow service role insert on suppliers" ON public.suppliers FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow service role update on suppliers" ON public.suppliers;
+CREATE POLICY "Allow service role update on suppliers" ON public.suppliers FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Allow service role insert on articles" ON public.articles;
+CREATE POLICY "Allow service role insert on articles" ON public.articles FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow service role update on articles" ON public.articles;
+CREATE POLICY "Allow service role update on articles" ON public.articles FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Allow service role insert on event_entities" ON public.event_entities;
+CREATE POLICY "Allow service role insert on event_entities" ON public.event_entities FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow service role update on event_entities" ON public.event_entities;
+CREATE POLICY "Allow service role update on event_entities" ON public.event_entities FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Allow service role insert on impact_assessments" ON public.impact_assessments;
+CREATE POLICY "Allow service role insert on impact_assessments" ON public.impact_assessments FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow service role update on impact_assessments" ON public.impact_assessments;
+CREATE POLICY "Allow service role update on impact_assessments" ON public.impact_assessments FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Allow service role insert on recommendations" ON public.recommendations;
+CREATE POLICY "Allow service role insert on recommendations" ON public.recommendations FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow service role update on recommendations" ON public.recommendations;
+CREATE POLICY "Allow service role update on recommendations" ON public.recommendations FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Allow service role insert on risk_assessments" ON public.risk_assessments;
+CREATE POLICY "Allow service role insert on risk_assessments" ON public.risk_assessments FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow service role update on risk_assessments" ON public.risk_assessments;
+CREATE POLICY "Allow service role update on risk_assessments" ON public.risk_assessments FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "Allow service role insert on scenario_results" ON public.scenario_results;
+CREATE POLICY "Allow service role insert on scenario_results" ON public.scenario_results FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow service role update on scenario_results" ON public.scenario_results;
+CREATE POLICY "Allow service role update on scenario_results" ON public.scenario_results FOR UPDATE USING (true);
